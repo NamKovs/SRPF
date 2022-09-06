@@ -2,8 +2,6 @@ package algorithm;
 
 import java.util.Random;
 
-import javax.xml.bind.ValidationEvent;
-
 import weka.classifiers.Classifier;
 import weka.classifiers.bayes.WAODE;
 import weka.classifiers.functions.SMO;
@@ -34,7 +32,7 @@ import weka.core.Instances;
  */
 
 
-public class SRDF {
+public class SRPF {
 	/**
 	 * A global random object.
 	 */
@@ -106,7 +104,7 @@ public class SRDF {
 	 *                             training set.
 	 ********************
 	 */
-	public SRDF(int paraNumOfIterations, int paraSizeOfSamplePool, int paraNumOfKeighbors, double paraProportion) {
+	public SRPF(int paraNumOfIterations, int paraSizeOfSamplePool, int paraNumOfKeighbors, double paraProportion) {
 		// Step 1 Set the parameters of constructor.
 		numOfIterations = paraNumOfIterations;
 		sizeOfSamplePool = paraSizeOfSamplePool;
@@ -181,10 +179,10 @@ public class SRDF {
 	 * @throws InterruptedException 
 	 *************************
 	 **/
-	public Instances constructSingleCLassifierData(Instance paraData, int paraClassValue) throws InterruptedException {
+	public Instances constructSingleCLassifierData(Instance paraData) throws InterruptedException {
 		
 		// Get the dimension of the feature after adding dimension.
-		int tempLengthForData = paraData.numAttributes();
+		int tempLengthForData = paraData.numAttributes() - 1;
 		int featureLength = tempLengthForData * 2;
 		
 		double feature[] = new double[featureLength];
@@ -219,35 +217,13 @@ public class SRDF {
 		for (int i = 0; i < featureLength; i++) {
 			vals[i] = feature[i];
 		}
-		vals[featureLength] = tempCreateAttVals.indexOf("" + paraClassValue);
+		vals[featureLength] = tempCreateAttVals.indexOf("0");
 		tempLabeledInstances.add(new Instance(1.0, vals));
 		tempLabeledInstances.setClassIndex(tempLabeledInstances.instance(0).numAttributes() - 1);
 		
 		return tempLabeledInstances;
 	}
 
-	/**
-	 *************************
-	 * Merge the two subsets after feature mapping.
-	 * 
-	 * @param paralabeledInstances1 The first sub Instances L1
-	 * @param paralabeledInstances2 The second sub Instances L2
-	 * @throws InterruptedException 
-	 *************************
-	 **/
-	public Instances constrcutClassifierData(Instances paralabeledInstances1, Instances paralabeledInstances2) throws InterruptedException {
-		Instances tempLabeledInstances = constructSingleCLassifierData(paralabeledInstances1.instance(0), 0);
-		Instance tempInstances = null;
-		for (int i = 1; i < paralabeledInstances1.numInstances(); i++) {
-			tempInstances = constructSingleCLassifierData(paralabeledInstances1.instance(i), 0).instance(0);
-			tempLabeledInstances.add(tempInstances);
-		}
-		for (int i = 0; i < paralabeledInstances2.numInstances(); i++) {
-			tempInstances = constructSingleCLassifierData(paralabeledInstances2.instance(i), 1).instance(0);
-			tempLabeledInstances.add(tempInstances);
-		}
-		return tempLabeledInstances;
-	}
 
 	/**
 	 ************************* 
@@ -295,9 +271,6 @@ public class SRDF {
 			predictiveRegressors[0].buildClassifier(subLabeledInstances1);
 			predictiveRegressors[1].buildClassifier(subLabeledInstances2);
 
-			// Construct the classifier.
-			Instances tempDataForClassifier = constrcutClassifierData(subLabeledInstances1, subLabeledInstances2);
-			classifier.buildClassifier(tempDataForClassifier);
 		} catch (Exception e) {
 			e.printStackTrace();
 		} // Of try...catch
@@ -309,17 +282,19 @@ public class SRDF {
 	 * 
 	 * @param paraTarget The unlabeled instance.
 	 * @param paraData 	 The labeled instances.
+	 * @throws InterruptedException 
 	 *************************
 	 **/
-	public double [][] getKNeighbors(Instance paraTarget, Instances paraData) {
+	public double [][] getKNeighbors(Instance paraTarget, Instances paraData) throws InterruptedException {
 		
 		// Step 1. Calculate the distance between unlabeled data and labeled data..
 		double distance[][] = new double[paraData.numInstances()][2];
 		for (int i = 0; i < paraData.numInstances(); i++) {
+			Instance _tempInstance = constructSingleCLassifierData(paraData.instance(i)).instance(0);
 			distance[i][0] = i;
 			double tempDistance = 0;
 			for (int j = 0; j < paraTarget.numAttributes()-1; j++) {
-				tempDistance += Math.pow(paraTarget.value(j) - paraData.instance(i).value(j), 2);
+				tempDistance += Math.pow(paraTarget.value(j) - _tempInstance.value(j), 2);
 			}//of for j
 			distance[i][1] = Math.sqrt(tempDistance);
  		}//of for i
@@ -362,12 +337,22 @@ public class SRDF {
 		double confidence = 0;
 		double kNeighbor[][] = getKNeighbors(paraInstance, paraInstances);
 		
-		for (int j = 0; j < kNeighbor.length; j++) {
-			Instance tempData = paraInstances.instance((int)kNeighbor[j][0]);
-			double firstNum = Math.pow(predictiveRegressors[paraNumOfRegressor].classifyInstance(tempData) - tempData.classValue(), 2);
-			double secondNum = Math.pow(tempregressor.classifyInstance(tempData) - tempData.classValue(), 2);
-			confidence += firstNum - secondNum;
-		} // Of for j
+		if (paraNumOfRegressor < 2) {
+			for (int j = 0; j < kNeighbor.length; j++) {
+				Instance tempData = paraInstances.instance((int)kNeighbor[j][0]);
+				double firstNum = Math.pow(predictiveRegressors[paraNumOfRegressor].classifyInstance(tempData) - tempData.classValue(), 2);
+				double secondNum = Math.pow(tempregressor.classifyInstance(tempData) - tempData.classValue(), 2);
+				confidence += firstNum - secondNum;
+			} // Of for j
+		}
+		else {
+			for (int j = 0; j < kNeighbor.length; j++) {
+				Instance tempData = paraInstances.instance((int)kNeighbor[j][0]);
+				double firstNum = Math.pow(separationRegressor.classifyInstance(tempData) - tempData.classValue(), 2);
+				double secondNum = Math.pow(tempregressor.classifyInstance(tempData) - tempData.classValue(), 2);
+				confidence += firstNum - secondNum;
+			} // Of for j
+		}
 		return confidence;
 	}//Of calculateCondidence
 	
@@ -393,52 +378,90 @@ public class SRDF {
 
 			// Step 2.2. paritioning sample data and calculate the confidence.
 			int tempMostConfidentIndex1 = 0;
-			int tempMostConfidentIndex2 = 0; 
+			int tempMostConfidentIndex2 = 0;
+			int tempMostConfidentIndex3 = 0;
 			double tempMostConfidentNumber1 = Double.MIN_VALUE;
-			double tempMostConfidentNumber2 = Double.MIN_VALUE;;
+			double tempMostConfidentNumber2 = Double.MIN_VALUE;
+			double tempMostConfidentNumber3 = Double.MIN_VALUE;
 			
 			for (int i = 0; i < sizeOfSamplePool; i++) {
 				Instance tempUnlabelInstance = unlabeledInstances.instance(tempRandArray[i]);
-				Instances tempDataInstance = constructSingleCLassifierData(tempUnlabelInstance, 0);
+				Instance tempDataInstance = constructSingleCLassifierData(tempUnlabelInstance).instance(0);
+				double kNeighbor[][] = getKNeighbors(tempDataInstance, labeledInstances);
 				
-				if(classifier.classifyInstance(tempDataInstance.instance(0)) == 0) {
+				double tempRmse[] = new double[3];
+				for (int j = 0; j < 5; j++) {
+					Instance tempInstance = labeledInstances.instance((int)kNeighbor[j][0]);
+					tempRmse[0] += Math.pow(predictiveRegressors[0].classifyInstance(tempInstance) - tempInstance.classValue(), 2);
+					tempRmse[1] += Math.pow(predictiveRegressors[1].classifyInstance(tempInstance) - tempInstance.classValue(), 2);
+					tempRmse[2] += Math.pow(separationRegressor.classifyInstance(tempInstance) - tempInstance.classValue(), 2);
+				}
+				if (tempRmse[0] < tempRmse[1] && tempRmse[0] < tempRmse[2]){
 					if(tempMostConfidentNumber1 < calculateCondidence(subLabeledInstances1, tempUnlabelInstance, 0)){
 						tempMostConfidentNumber1 = calculateCondidence(subLabeledInstances1, tempUnlabelInstance, 0);
 						tempMostConfidentIndex1 = i;
 					}//Of if
-				}else {
-					if(tempMostConfidentNumber2 < calculateCondidence(subLabeledInstances2, tempUnlabelInstance, 1)){
-						tempMostConfidentNumber2 = calculateCondidence(subLabeledInstances2,tempUnlabelInstance, 1);
+				}
+				if (tempRmse[1] < tempRmse[0] && tempRmse[1] < tempRmse[2]){
+					if(tempMostConfidentNumber2 < calculateCondidence(subLabeledInstances1, tempUnlabelInstance, 1)){
+						tempMostConfidentNumber2 = calculateCondidence(subLabeledInstances1, tempUnlabelInstance, 1);
 						tempMostConfidentIndex2 = i;
 					}//Of if
-				}//Of if
+				}
+				if (tempRmse[2] < tempRmse[0] && tempRmse[2] < tempRmse[1]){
+					if(tempMostConfidentNumber3 < calculateCondidence(subLabeledInstances1, tempUnlabelInstance, 2)){
+						tempMostConfidentNumber3 = calculateCondidence(subLabeledInstances1, tempUnlabelInstance, 2);
+						tempMostConfidentIndex3 = i;
+					}//Of if
+				}	
 			}//Of for i
 			
 			
 			// Step 2.3. Add unlabeled data to the labeled data set and delete it from the unlabeled data set.
 			Instance addInstance1 = unlabeledInstances.instance(tempRandArray[tempMostConfidentIndex1]);
 			Instance addInstance2 = unlabeledInstances.instance(tempRandArray[tempMostConfidentIndex2]);
+			Instance addInstance3 = unlabeledInstances.instance(tempRandArray[tempMostConfidentIndex3]);
 			double tempPredictNum1 = predictiveRegressors[0].classifyInstance(addInstance1);
 			double tempPredictNum2 = predictiveRegressors[1].classifyInstance(addInstance2);
+			double tempPredictNum3 = separationRegressor.classifyInstance(addInstance3);
 			subLabeledInstances1.add(addInstance1);
 			subLabeledInstances1.instance(subLabeledInstances1.numInstances() - 1).setClassValue(tempPredictNum1);		
 			subLabeledInstances2.add(addInstance2);
 			subLabeledInstances2.instance(subLabeledInstances2.numInstances() - 1).setClassValue(tempPredictNum2);
+			
+			
+			labeledInstances.add(addInstance1);
+			labeledInstances.instance(labeledInstances.numInstances() - 1).setClassValue(tempPredictNum1);
+			labeledInstances.add(addInstance2);
+			labeledInstances.instance(labeledInstances.numInstances() - 1).setClassValue(tempPredictNum2);
+			labeledInstances.add(addInstance3);
+			labeledInstances.instance(labeledInstances.numInstances() - 1).setClassValue(tempPredictNum3);
 		
 			// Step 2.4. Delete most confidence data from the unlabeled data. 
 			unlabeledInstances.delete(tempRandArray[tempMostConfidentIndex1]);
-			if (tempRandArray[tempMostConfidentIndex2] == 0) {
-					unlabeledInstances.delete(tempRandArray[tempMostConfidentIndex2]);
-			} else {
-					unlabeledInstances.delete(tempRandArray[tempMostConfidentIndex2] - 1);
+			
+			if ((tempRandArray[tempMostConfidentIndex2] == 0) || 
+					(tempRandArray[tempMostConfidentIndex2]== 1 && tempRandArray[tempMostConfidentIndex1] == 0)) {
+				unlabeledInstances.delete(tempRandArray[tempMostConfidentIndex2]);
+			}else{
+				unlabeledInstances.delete(tempRandArray[tempMostConfidentIndex2] - 1);
+			}
+			
+			if ((tempRandArray[tempMostConfidentIndex3] == 0) || 
+					(tempRandArray[tempMostConfidentIndex3]== 1 && tempRandArray[tempMostConfidentIndex2] == 0) || 
+					(tempRandArray[tempMostConfidentIndex3]== 1 && tempRandArray[tempMostConfidentIndex1] == 0) ||
+					(tempRandArray[tempMostConfidentIndex3]== 2 && tempRandArray[tempMostConfidentIndex1] == 0 && 
+					tempRandArray[tempMostConfidentIndex2] == 1) || (tempRandArray[tempMostConfidentIndex3]== 2 && 
+					tempRandArray[tempMostConfidentIndex1] == 1 &&tempRandArray[tempMostConfidentIndex2] == 0)) {
+				unlabeledInstances.delete(tempRandArray[tempMostConfidentIndex3]);
+			}else{
+				unlabeledInstances.delete(tempRandArray[tempMostConfidentIndex3] - 2);
 			}
 		
 			// Step 2.5. Update the predictive regressors and classifier.
 			predictiveRegressors[0].buildClassifier(subLabeledInstances1);
 			predictiveRegressors[1].buildClassifier(subLabeledInstances2);
-
-			Instances tempDataForClassofier = constrcutClassifierData(subLabeledInstances1, subLabeledInstances2);
-			classifier.buildClassifier(tempDataForClassofier);	
+			separationRegressor.buildClassifier(labeledInstances);
 			tempIteration += 1;
 		}//Of while
 	}// Of buildClassifier
@@ -453,12 +476,27 @@ public class SRDF {
 	 **/
 	public double classifyInstance(Instance paraData) throws Exception {
 		double val = 0;
-		Instances tempLabeledInstances = constructSingleCLassifierData(paraData, 0);
-		if(classifier.classifyInstance(tempLabeledInstances.instance(0)) == 0) {
+		
+		double kNeighbor[][] = getKNeighbors(constructSingleCLassifierData(paraData).instance(0), labeledInstances);
+		double tempRmse[] = new double[3];
+		for (int j = 0; j < 5; j++) {
+			Instance tempInstance = labeledInstances.instance((int)kNeighbor[j][0]);
+			tempRmse[0] += Math.pow(predictiveRegressors[0].classifyInstance(tempInstance) - tempInstance.classValue(), 2);
+			tempRmse[1] += Math.pow(predictiveRegressors[1].classifyInstance(tempInstance) - tempInstance.classValue(), 2);
+			tempRmse[2] += Math.pow(separationRegressor.classifyInstance(tempInstance) - tempInstance.classValue(), 2);
+		}
+		
+		if (tempRmse[0] < tempRmse[1] && tempRmse[0] < tempRmse[2]){
 			val = predictiveRegressors[0].classifyInstance(paraData);
-		}else {
+		}
+		if (tempRmse[1] < tempRmse[0] && tempRmse[1] < tempRmse[2]){
 			val = predictiveRegressors[1].classifyInstance(paraData);
+		}
+		if (tempRmse[2] < tempRmse[0] && tempRmse[2] < tempRmse[1]){
+			val = separationRegressor.classifyInstance(paraData);
 		}
 		return val;
 	}
+	
+	
 }// Of class SRDP
